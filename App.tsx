@@ -5,16 +5,8 @@
  * @format
  */
 
-import React, {useEffect, useState} from 'react';
-import {
-  SafeAreaView,
-  ScrollView,
-  StatusBar,
-  Text,
-  useColorScheme,
-  View,
-} from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import NetInfo from '@react-native-community/netinfo';
 import {createAsyncStoragePersister} from '@tanstack/query-async-storage-persister';
 import {
   MutationCache,
@@ -23,10 +15,20 @@ import {
   useMutation,
 } from '@tanstack/react-query';
 import {PersistQueryClientProvider} from '@tanstack/react-query-persist-client';
-import NetInfo from '@react-native-community/netinfo';
+import React, {useEffect, useState} from 'react';
+import {
+  SafeAreaView,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TouchableHighlight,
+  useColorScheme,
+  View,
+} from 'react-native';
 
-import {Colors, Header} from 'react-native/Libraries/NewAppScreen';
 import axios from 'axios';
+import {Colors} from 'react-native/Libraries/NewAppScreen';
 
 if (__DEV__) {
   import('./reactotron-config').then(() =>
@@ -34,22 +36,26 @@ if (__DEV__) {
   );
 }
 
-// this is important define network status
-// use event listener with react-native-netinfo
-// false => the mutation should not run and cached in storage
-// true => the mutation run normally
+// this is important for setting the network status
+// use event listener with react-native-netinfo for better approach
+// false => mutation should not be performed and will be cached
+// true => mutation runs normally
 // onlineManager.setOnline(false);
+
+// simple mock
+const MOCK_POST_UTL =
+  'https://run.mocky.io/v3/e991ff6c-b5ee-4610-a606-1c7e214d74c2';
 
 const persister = createAsyncStoragePersister({
   storage: AsyncStorage,
-  // throttleTime: 5000,
+  throttleTime: 1000,
 });
 
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      // cacheTime: 1000 * 60 * 60 * 24, // 24 hours
-      // staleTime: 2000,
+      cacheTime: 1000 * 60 * 60 * 24, // 24 hours
+      staleTime: 2000,
       retry: 5,
     },
   },
@@ -64,13 +70,12 @@ const queryClient = new QueryClient({
 });
 
 queryClient.setMutationDefaults(['offlineMutations'], {
-  mutationFn: async () => axios.post('https://demo6071874.mockable.io/lalala'), // simple mock
+  mutationFn: async () => axios.post(MOCK_POST_UTL),
 });
 
 function UseOfflineMutation() {
   const offlineMutation = useMutation({
     mutationKey: ['offlineMutations'],
-    networkMode: 'always', // force offline execution
     onMutate(variables) {
       console.log('@@@ UseOfflineMutation onMutate - variables', variables);
     },
@@ -79,15 +84,18 @@ function UseOfflineMutation() {
   return {offlineMutation};
 }
 
-function EmptyComponent() {
+function ComponentMutation() {
   const {offlineMutation} = UseOfflineMutation();
 
-  // uncomment to test request on app open
-  useEffect(() => {
+  const handleOnPress = () => {
     offlineMutation.mutate();
-  }, []);
+  };
 
-  return null;
+  return (
+    <TouchableHighlight onPress={handleOnPress} style={styles.Button}>
+      <Text style={styles.ButtonText}>Run mutation</Text>
+    </TouchableHighlight>
+  );
 }
 
 function App(): JSX.Element {
@@ -100,8 +108,9 @@ function App(): JSX.Element {
 
   useEffect(() => {
     const unsubscribe = NetInfo.addEventListener(({isConnected}) => {
-      setIsOnline(!!isConnected);
-      onlineManager.setOnline(!!isConnected);
+      const status = !!isConnected;
+      setIsOnline(status);
+      onlineManager.setOnline(status);
     });
     return () => unsubscribe();
   }, []);
@@ -130,18 +139,36 @@ function App(): JSX.Element {
         <ScrollView
           contentInsetAdjustmentBehavior="automatic"
           style={backgroundStyle}>
-          <Header />
           <View
             style={{
               backgroundColor: isDarkMode ? Colors.black : Colors.white,
             }}>
-            <Text>{isOnline ? 'Online' : 'Offline'}</Text>
-            <EmptyComponent />
+            <Text style={styles.OnlineStatus}>
+              {isOnline ? 'Online' : 'Offline'}
+            </Text>
+            <ComponentMutation />
           </View>
         </ScrollView>
       </SafeAreaView>
     </PersistQueryClientProvider>
   );
 }
+
+const styles = StyleSheet.create({
+  OnlineStatus: {
+    paddingTop: 20,
+    fontSize: 25,
+    alignSelf: 'center',
+  },
+  Button: {
+    alignSelf: 'center',
+    backgroundColor: '#DDD',
+    padding: 15,
+  },
+  ButtonText: {
+    fontSize: 20,
+    alignSelf: 'center',
+  },
+});
 
 export default App;
